@@ -23,7 +23,7 @@ def fetch_stock_data(
     return df
 
 
-def fetch_multiple(symbols: list[str], period: str = "5y", interval: str = "1d") -> dict[str, pd.DataFrame]:
+def fetch_multiple(symbols: list, period: str = "5y", interval: str = "1d") -> dict:
     """Fetch data for multiple symbols."""
     result = {}
     for s in symbols:
@@ -79,7 +79,7 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def prepare_ml_features(
     df: pd.DataFrame,
-    index_data: dict[str, pd.DataFrame] | None = None,
+    index_data=None,
 ) -> pd.DataFrame:
     """Prepare features for ML model. All features are strictly backward-looking."""
     df = add_technical_indicators(df)

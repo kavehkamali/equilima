@@ -32,8 +32,8 @@ class StrategyType(str, Enum):
 class BacktestConfig:
     strategy: StrategyType
     symbol: str
-    start_date: str | None = None
-    end_date: str | None = None
+    start_date: str = None
+    end_date: str = None
     initial_capital: float = 100_000.0
     commission_pct: float = 0.001  # 0.1% per trade
     slippage_pct: float = 0.0005  # 0.05% slippage

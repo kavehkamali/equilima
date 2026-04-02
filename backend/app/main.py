@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from pydantic import BaseModel
+from typing import Optional, List, Dict
 import pandas as pd
 import math
 import json
@@ -32,8 +33,8 @@ class BacktestRequest(BaseModel):
     symbol: str = "AAPL"
     strategy: str = "sma_crossover"
     period: str = "max"
-    start_date: str | None = None
-    end_date: str | None = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
     initial_capital: float = 100_000.0
     commission_pct: float = 0.001
     position_size: float = 1.0
@@ -42,18 +43,18 @@ class BacktestRequest(BaseModel):
 
 class CompareRequest(BaseModel):
     symbol: str = "AAPL"
-    strategies: list[str] = ["sma_crossover", "buy_and_hold"]
+    strategies: List[str] = ["sma_crossover", "buy_and_hold"]
     period: str = "max"
-    start_date: str | None = None
-    end_date: str | None = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
     initial_capital: float = 100_000.0
     commission_pct: float = 0.001
-    params_per_strategy: dict[str, dict] = {}
+    params_per_strategy: Dict[str, dict] = {}
 
 
 class ScreenerRequest(BaseModel):
     list_id: str = "sp500_top100"
-    strategies: list[str] = ["sma_crossover", "ema_crossover", "rsi", "macd", "bollinger_bands", "momentum"]
+    strategies: List[str] = ["sma_crossover", "ema_crossover", "rsi", "macd", "bollinger_bands", "momentum"]
 
 
 @app.get("/api/health")

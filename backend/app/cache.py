@@ -41,7 +41,7 @@ def _is_fresh(path: Path, ttl: int) -> bool:
     return age < ttl
 
 
-def get_cached_prices(symbol: str, period: str = "2y") -> pd.DataFrame | None:
+def get_cached_prices(symbol: str, period: str = "2y") -> pd.DataFrame:
     path = _cache_path(PRICE_CACHE_DIR, f"{symbol}_{period}")
     if _is_fresh(path, PRICE_TTL):
         try:
@@ -56,7 +56,7 @@ def set_cached_prices(symbol: str, df: pd.DataFrame, period: str = "2y"):
     path.write_bytes(pickle.dumps(df))
 
 
-def get_cached_fundamentals(symbol: str) -> dict | None:
+def get_cached_fundamentals(symbol: str) -> dict:
     path = _cache_path(FUNDAMENTAL_CACHE_DIR, symbol)
     if _is_fresh(path, FUNDAMENTAL_TTL):
         try:
@@ -131,7 +131,7 @@ def fetch_fundamentals_cached(symbol: str) -> dict:
         return {"name": symbol, "sector": "", "industry": ""}
 
 
-def batch_fetch_prices(symbols: list[str], period: str = "2y") -> dict[str, pd.DataFrame]:
+def batch_fetch_prices(symbols: list, period: str = "2y") -> dict:
     """
     Batch fetch prices. Uses yf.download for uncached symbols (much faster).
     """
