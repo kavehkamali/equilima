@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react';
 import { fetchStrategies, compareStrategies } from './api';
+import DashboardPanel from './components/DashboardPanel';
 import ComparePanel from './components/ComparePanel';
 import ScreenerPanel from './components/ScreenerPanel';
-import NewsPanel from './components/NewsPanel';
-import MarketPanel from './components/MarketPanel';
-import CryptoPanel from './components/CryptoPanel';
-import TerminalPanel from './components/terminal/TerminalPanel';
 import ResearchPanel from './components/ResearchPanel';
+import TerminalPanel from './components/terminal/TerminalPanel';
 import Header from './components/Header';
 
 function App() {
   const [strategies, setStrategies] = useState([]);
-  const [activeTab, setActiveTab] = useState('terminal');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [compareResults, setCompareResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -49,10 +47,8 @@ function App() {
               {error}
             </div>
           )}
-          {activeTab === 'markets' && <MarketPanel />}
+          {activeTab === 'dashboard' && <DashboardPanel />}
           {activeTab === 'screener' && <ScreenerPanel />}
-          {activeTab === 'crypto' && <CryptoPanel />}
-          {activeTab === 'news' && <NewsPanel />}
           {activeTab === 'research' && <ResearchPanel />}
           {activeTab === 'backtest' && (
             <ComparePanel

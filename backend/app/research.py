@@ -194,6 +194,141 @@ def get_research(symbol: str):
         except Exception:
             pass
 
+        # ─── Snowflake Chart (Simply Wall St style) ───
+        # Each dimension scored 0-6
+        def _snowflake_score(val, thresholds, reverse=False):
+            """Score 0-6 based on thresholds."""
+            if val is None:
+                return 3  # neutral
+            scores = [0, 1, 2, 3, 4, 5, 6] if not reverse else [6, 5, 4, 3, 2, 1, 0]
+            for i, t in enumerate(thresholds):
+                if val < t:
+                    return scores[i]
+            return scores[-1]
+
+        # Value: based on P/E, P/B, PEG
+        v_pe = _snowflake_score(info.get("trailingPE"), [8, 12, 18, 25, 35, 50], reverse=True)
+        v_pb = _snowflake_score(info.get("priceToBook"), [1, 2, 3, 5, 8, 15], reverse=True)
+        v_peg = _snowflake_score(info.get("pegRatio"), [0.5, 1, 1.5, 2, 3, 5], reverse=True)
+        value_score = round((v_pe + v_pb + v_peg) / 3, 1)
+
+        # Future: earnings growth, revenue growth, analyst target upside
+        f_eg = _snowflake_score(info.get("earningsGrowth"), [-0.1, 0, 0.05, 0.10, 0.20, 0.40])
+        f_rg = _snowflake_score(info.get("revenueGrowth"), [-0.05, 0, 0.05, 0.10, 0.15, 0.25])
+        upside = ((info.get("targetMeanPrice", 0) or 0) / price - 1) if price else 0
+        f_up = _snowflake_score(upside, [-0.1, 0, 0.05, 0.10, 0.20, 0.30])
+        future_score = round((f_eg + f_rg + f_up) / 3, 1)
+
+        # Past: profit margin, ROE, ROA
+        p_pm = _snowflake_score(info.get("profitMargins"), [-0.05, 0, 0.05, 0.10, 0.15, 0.25])
+        p_roe = _snowflake_score(info.get("returnOnEquity"), [-0.05, 0, 0.08, 0.15, 0.25, 0.40])
+        p_roa = _snowflake_score(info.get("returnOnAssets"), [-0.02, 0, 0.03, 0.06, 0.10, 0.15])
+        past_score = round((p_pm + p_roe + p_roa) / 3, 1)
+
+        # Health: debt/equity, current ratio, interest coverage
+        h_de = _snowflake_score(info.get("debtToEquity"), [20, 50, 80, 120, 200, 400], reverse=True)
+        h_cr = _snowflake_score(info.get("currentRatio"), [0.5, 0.8, 1.0, 1.5, 2.0, 3.0])
+        health_score = round((h_de + h_cr) / 2, 1)
+
+        # Dividend: yield, payout ratio, consistency
+        div_yield = info.get("dividendYield", 0) or 0
+        d_y = _snowflake_score(div_yield, [0, 0.01, 0.02, 0.03, 0.04, 0.06])
+        payout = info.get("payoutRatio", 0) or 0
+        d_p = _snowflake_score(payout, [0, 0.2, 0.4, 0.6, 0.8, 1.0], reverse=True) if payout > 0 else 3
+        dividend_score = round((d_y + d_p) / 2, 1) if div_yield > 0 else 0
+
+        snowflake = {
+            "value": min(6, value_score),
+            "future": min(6, future_score),
+            "past": min(6, past_score),
+            "health": min(6, health_score),
+            "dividend": min(6, dividend_score),
+            "total": round(min(6, (value_score + future_score + past_score + health_score + dividend_score) / 5), 1),
+        }
+
+        # ─── DCF Fair Value (simplified) ───
+        fair_value = None
+        fair_value_discount = None
+        try:
+            fcf = info.get("freeCashflow")
+            shares_out = info.get("sharesOutstanding")
+            growth_rate = info.get("revenueGrowth", 0.05) or 0.05
+            if fcf and shares_out and fcf > 0:
+                # 10-year DCF with 10% discount rate, 3% terminal growth
+                discount_rate = 0.10
+                terminal_growth = 0.03
+                total_pv = 0
+                projected_fcf = float(fcf)
+                for yr in range(1, 11):
+                    projected_fcf *= (1 + min(growth_rate, 0.30))  # cap growth at 30%
+                    total_pv += projected_fcf / ((1 + discount_rate) ** yr)
+                # Terminal value
+                terminal_val = projected_fcf * (1 + terminal_growth) / (discount_rate - terminal_growth)
+                total_pv += terminal_val / ((1 + discount_rate) ** 10)
+                fair_value = round(total_pv / float(shares_out), 2)
+                fair_value_discount = round((price / fair_value - 1) * 100, 1) if fair_value > 0 else None
+        except Exception:
+            pass
+
+        dcf = {
+            "fair_value": fair_value,
+            "current_price": price,
+            "discount_pct": fair_value_discount,
+            "undervalued": fair_value_discount < 0 if fair_value_discount is not None else None,
+        }
+
+        # ─── Risk Checklist (Simply Wall St style) ───
+        risk_checks = []
+        # Debt
+        de = info.get("debtToEquity")
+        if de is not None:
+            risk_checks.append({"label": "Debt to equity ratio", "value": f"{de:.0f}%", "pass": de < 100, "detail": "below 100% is healthy" if de < 100 else "high leverage"})
+        cr = info.get("currentRatio")
+        if cr is not None:
+            risk_checks.append({"label": "Current ratio", "value": f"{cr:.2f}", "pass": cr >= 1.0, "detail": "can cover short-term obligations" if cr >= 1.0 else "may struggle with short-term debt"})
+        # Profitability
+        pm = info.get("profitMargins")
+        if pm is not None:
+            risk_checks.append({"label": "Profit margin", "value": f"{pm*100:.1f}%", "pass": pm > 0, "detail": "company is profitable" if pm > 0 else "company is unprofitable"})
+        roe = info.get("returnOnEquity")
+        if roe is not None:
+            risk_checks.append({"label": "Return on equity", "value": f"{roe*100:.1f}%", "pass": roe > 0.10, "detail": "strong returns" if roe > 0.10 else "below average returns"})
+        # Growth
+        rg = info.get("revenueGrowth")
+        if rg is not None:
+            risk_checks.append({"label": "Revenue growing", "value": f"{rg*100:.1f}%", "pass": rg > 0, "detail": "revenue is growing" if rg > 0 else "revenue is declining"})
+        eg = info.get("earningsGrowth")
+        if eg is not None:
+            risk_checks.append({"label": "Earnings growing", "value": f"{eg*100:.1f}%", "pass": eg > 0, "detail": "earnings are growing" if eg > 0 else "earnings are declining"})
+        # Valuation
+        pe = info.get("trailingPE")
+        if pe is not None:
+            risk_checks.append({"label": "P/E ratio reasonable", "value": f"{pe:.1f}", "pass": pe < 30, "detail": "reasonably valued" if pe < 30 else "premium valuation"})
+        # Dividend
+        pr = info.get("payoutRatio")
+        if pr is not None and div_yield > 0:
+            risk_checks.append({"label": "Dividend sustainable", "value": f"{pr*100:.0f}% payout", "pass": pr < 0.75, "detail": "payout is sustainable" if pr < 0.75 else "payout ratio is high"})
+        # Short interest
+        sf = info.get("shortPercentOfFloat")
+        if sf is not None:
+            risk_checks.append({"label": "Low short interest", "value": f"{sf*100:.1f}%", "pass": sf < 0.05, "detail": "minimal short pressure" if sf < 0.05 else "elevated short interest"})
+        # Beta
+        beta = info.get("beta")
+        if beta is not None:
+            risk_checks.append({"label": "Moderate volatility", "value": f"{beta:.2f} beta", "pass": 0.5 < beta < 1.5, "detail": "normal volatility" if 0.5 < beta < 1.5 else "volatile stock"})
+
+        # ─── Ownership Pie (for visual) ───
+        ownership_pie = []
+        ins_pct = info.get("heldPercentInsiders", 0) or 0
+        inst_pct = info.get("heldPercentInstitutions", 0) or 0
+        pub_pct = max(0, 1 - ins_pct - inst_pct)
+        if ins_pct > 0:
+            ownership_pie.append({"name": "Insiders", "value": round(ins_pct * 100, 1), "color": "#6366f1"})
+        if inst_pct > 0:
+            ownership_pie.append({"name": "Institutions", "value": round(inst_pct * 100, 1), "color": "#22c55e"})
+        if pub_pct > 0:
+            ownership_pie.append({"name": "Public", "value": round(pub_pct * 100, 1), "color": "#f59e0b"})
+
         # ─── Financials (quarterly + annual) ───
         financials_annual = []
         financials_quarterly = []
@@ -559,6 +694,10 @@ def get_research(symbol: str):
             "recommendations": recommendations,
             "ratings_summary": ratings_summary,
             "risk_metrics": risk_metrics,
+            "snowflake": snowflake,
+            "dcf": dcf,
+            "risk_checks": risk_checks,
+            "ownership_pie": ownership_pie,
         }
 
     except Exception as e:

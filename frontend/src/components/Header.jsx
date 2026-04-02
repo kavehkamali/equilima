@@ -13,12 +13,10 @@ export default function Header({ activeTab, setActiveTab }) {
 
         <nav className="flex gap-0.5 bg-white/5 rounded-lg p-1">
           {[
-            { id: 'terminal', label: 'Terminal' },
-            { id: 'markets', label: 'Markets' },
+            { id: 'dashboard', label: 'Dashboard' },
             { id: 'screener', label: 'Screener' },
             { id: 'research', label: 'Research' },
-            { id: 'crypto', label: 'Crypto' },
-            { id: 'news', label: 'News' },
+            { id: 'terminal', label: 'Terminal' },
             { id: 'backtest', label: 'Backtesting' },
           ].map(tab => (
             <button

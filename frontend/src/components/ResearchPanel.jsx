@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Loader2, Search, ExternalLink, Clock, TrendingUp, TrendingDown } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell, ComposedChart, Line } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell, ComposedChart, Line, PieChart, Pie } from 'recharts';
 import { fetchResearch } from '../api';
 
 // ─── Helpers ───
@@ -64,6 +64,157 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
+// ─── Snowflake Radar Chart (SVG) ───
+function SnowflakeChart({ data }) {
+  if (!data) return null;
+  const dims = [
+    { key: 'value', label: 'Value', color: '#6366f1' },
+    { key: 'future', label: 'Future', color: '#22c55e' },
+    { key: 'past', label: 'Past', color: '#f59e0b' },
+    { key: 'health', label: 'Health', color: '#06b6d4' },
+    { key: 'dividend', label: 'Dividend', color: '#ec4899' },
+  ];
+  const cx = 120, cy = 120, maxR = 90;
+  const angleStep = (2 * Math.PI) / 5;
+  const startAngle = -Math.PI / 2;
+
+  const getPoint = (i, val) => {
+    const angle = startAngle + i * angleStep;
+    const r = (val / 6) * maxR;
+    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+  };
+
+  // Grid rings
+  const rings = [1, 2, 3, 4, 5, 6].map(level => {
+    const pts = dims.map((_, i) => getPoint(i, level));
+    return pts.map(p => `${p.x},${p.y}`).join(' ');
+  });
+
+  // Data polygon
+  const dataPts = dims.map((d, i) => getPoint(i, data[d.key] || 0));
+  const dataPath = dataPts.map(p => `${p.x},${p.y}`).join(' ');
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width={240} height={240} viewBox="0 0 240 240">
+        {/* Grid */}
+        {rings.map((pts, i) => (
+          <polygon key={i} points={pts} fill="none" stroke="#ffffff06" strokeWidth={1} />
+        ))}
+        {/* Axis lines */}
+        {dims.map((_, i) => {
+          const p = getPoint(i, 6);
+          return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#ffffff08" strokeWidth={1} />;
+        })}
+        {/* Data fill */}
+        <polygon points={dataPath} fill="#6366f115" stroke="#6366f1" strokeWidth={2} />
+        {/* Data dots */}
+        {dataPts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={4} fill={dims[i].color} stroke="#08080d" strokeWidth={2} />
+        ))}
+        {/* Labels */}
+        {dims.map((d, i) => {
+          const p = getPoint(i, 7.2);
+          return (
+            <text key={i} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle"
+              fill={d.color} fontSize={10} fontWeight={600}>{d.label}</text>
+          );
+        })}
+        {/* Scores */}
+        {dims.map((d, i) => {
+          const p = getPoint(i, 8.5);
+          return (
+            <text key={`s${i}`} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle"
+              fill="#888" fontSize={9}>{data[d.key]}/6</text>
+          );
+        })}
+        {/* Center score */}
+        <text x={cx} y={cy - 6} textAnchor="middle" fill="white" fontSize={18} fontWeight={700}>{data.total}</text>
+        <text x={cx} y={cy + 10} textAnchor="middle" fill="#666" fontSize={9}>/6</text>
+      </svg>
+    </div>
+  );
+}
+
+// ─── DCF Fair Value Bar ───
+function FairValueBar({ dcf }) {
+  if (!dcf?.fair_value) return null;
+  const { fair_value, current_price, discount_pct, undervalued } = dcf;
+  const max = Math.max(fair_value, current_price) * 1.2;
+  return (
+    <div>
+      <div className="flex items-end gap-4 h-24 mb-2">
+        <div className="flex-1 text-center">
+          <div className={`rounded-t-lg ${undervalued ? 'bg-emerald-500/30' : 'bg-red-500/30'}`}
+            style={{ height: `${(current_price / max) * 100}%`, minHeight: 20 }}>
+            <div className="text-[10px] text-white font-bold pt-1">${current_price}</div>
+          </div>
+          <div className="text-[9px] text-gray-500 mt-1">Current</div>
+        </div>
+        <div className="flex-1 text-center">
+          <div className="bg-indigo-500/30 rounded-t-lg"
+            style={{ height: `${(fair_value / max) * 100}%`, minHeight: 20 }}>
+            <div className="text-[10px] text-white font-bold pt-1">${fair_value}</div>
+          </div>
+          <div className="text-[9px] text-gray-500 mt-1">Fair Value</div>
+        </div>
+      </div>
+      <div className={`text-center text-sm font-bold ${undervalued ? 'text-emerald-400' : 'text-red-400'}`}>
+        {undervalued ? `${Math.abs(discount_pct)}% undervalued` : `${discount_pct}% overvalued`}
+      </div>
+    </div>
+  );
+}
+
+// ─── Ownership Pie ───
+function OwnershipPie({ data }) {
+  if (!data?.length) return null;
+  return (
+    <div className="flex items-center gap-4">
+      <ResponsiveContainer width={120} height={120}>
+        <PieChart>
+          <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={30} outerRadius={50} paddingAngle={2}>
+            {data.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="space-y-1.5">
+        {data.map((d, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: d.color }} />
+            <span className="text-xs text-gray-400">{d.name}</span>
+            <span className="text-xs text-white font-medium">{d.value}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Risk Checklist ───
+function RiskChecklist({ checks }) {
+  if (!checks?.length) return null;
+  const passed = checks.filter(c => c.pass).length;
+  return (
+    <div>
+      <div className="text-xs text-gray-400 mb-2">
+        <span className="text-emerald-400 font-bold">{passed}</span>/{checks.length} checks passed
+      </div>
+      <div className="space-y-1.5">
+        {checks.map((c, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${c.pass ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+              {c.pass ? '✓' : '✗'}
+            </div>
+            <span className="text-xs text-gray-300 flex-1">{c.label}</span>
+            <span className={`text-[10px] font-mono ${c.pass ? 'text-emerald-400' : 'text-red-400'}`}>{c.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── TABS ───
 const TABS = [
   { id: 'summary', label: 'Summary' },
@@ -118,6 +269,22 @@ function SummaryTab({ data }) {
           ))}
         </div>
       )}
+
+      {/* Snowflake + DCF + Ownership + Risk — SWS-style row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card title="Snowflake Analysis">
+          <SnowflakeChart data={data.snowflake} />
+        </Card>
+        <Card title="Fair Value (DCF)">
+          <FairValueBar dcf={data.dcf} />
+        </Card>
+        <Card title="Ownership Breakdown">
+          <OwnershipPie data={data.ownership_pie} />
+        </Card>
+        <Card title="Health Check">
+          <RiskChecklist checks={data.risk_checks} />
+        </Card>
+      </div>
 
       {/* Quant Grades */}
       <Card title="Quant Rating">
