@@ -1,0 +1,706 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import pandas as pd
+import math
+import json
+from dataclasses import asdict
+
+from .data_fetcher import fetch_stock_data, add_technical_indicators, fetch_multiple, DEFAULT_INDICES
+from .backtester import BacktestConfig, StrategyType, run_backtest
+from .terminal import router as terminal_router
+from .research import router as research_router
+
+app = FastAPI(title="Stock Backtesting Dashboard API")
+app.include_router(terminal_router)
+app.include_router(research_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class BacktestRequest(BaseModel):
+    symbol: str = "AAPL"
+    strategy: str = "sma_crossover"
+    period: str = "max"
+    start_date: str | None = None
+    end_date: str | None = None
+    initial_capital: float = 100_000.0
+    commission_pct: float = 0.001
+    position_size: float = 1.0
+    params: dict = {}
+
+
+class CompareRequest(BaseModel):
+    symbol: str = "AAPL"
+    strategies: list[str] = ["sma_crossover", "buy_and_hold"]
+    period: str = "max"
+    start_date: str | None = None
+    end_date: str | None = None
+    initial_capital: float = 100_000.0
+    commission_pct: float = 0.001
+    params_per_strategy: dict[str, dict] = {}
+
+
+class ScreenerRequest(BaseModel):
+    list_id: str = "sp500_top100"
+    strategies: list[str] = ["sma_crossover", "ema_crossover", "rsi", "macd", "bollinger_bands", "momentum"]
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/api/stock/{symbol}")
+def get_stock_data(symbol: str, period: str = "2y", interval: str = "1d"):
+    """Fetch stock OHLCV data with technical indicators."""
+    try:
+        df = fetch_stock_data(symbol, period, interval)
+        df = add_technical_indicators(df)
+        records = df.reset_index().rename(columns={"index": "date"})
+        records["date"] = records["date"].dt.strftime("%Y-%m-%d")
+        return {"symbol": symbol, "data": records.to_dict("records")}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/strategies")
+def list_strategies():
+    """List available backtesting strategies with their configurable parameters."""
+    return {
+        "strategies": [
+            {
+                "id": "buy_and_hold",
+                "name": "Buy & Hold",
+                "description": "Simple buy and hold benchmark",
+                "params": [],
+            },
+            {
+                "id": "sma_crossover",
+                "name": "SMA Crossover",
+                "description": "Buy when fast SMA crosses above slow SMA, sell on cross below",
+                "params": [
+                    {"name": "fast_period", "type": "int", "default": 20, "min": 5, "max": 100},
+                    {"name": "slow_period", "type": "int", "default": 50, "min": 20, "max": 200},
+                ],
+            },
+            {
+                "id": "ema_crossover",
+                "name": "EMA Crossover",
+                "description": "Buy when fast EMA crosses above slow EMA",
+                "params": [
+                    {"name": "fast_period", "type": "int", "default": 12, "min": 5, "max": 50},
+                    {"name": "slow_period", "type": "int", "default": 26, "min": 10, "max": 100},
+                ],
+            },
+            {
+                "id": "rsi",
+                "name": "RSI",
+                "description": "Buy when RSI is oversold, sell when overbought",
+                "params": [
+                    {"name": "period", "type": "int", "default": 14, "min": 5, "max": 30},
+                    {"name": "oversold", "type": "int", "default": 30, "min": 10, "max": 40},
+                    {"name": "overbought", "type": "int", "default": 70, "min": 60, "max": 90},
+                ],
+            },
+            {
+                "id": "macd",
+                "name": "MACD",
+                "description": "Buy on MACD signal line crossover, sell on cross-under",
+                "params": [
+                    {"name": "fast_period", "type": "int", "default": 12, "min": 5, "max": 30},
+                    {"name": "slow_period", "type": "int", "default": 26, "min": 15, "max": 50},
+                    {"name": "signal_period", "type": "int", "default": 9, "min": 5, "max": 20},
+                ],
+            },
+            {
+                "id": "bollinger_bands",
+                "name": "Bollinger Bands",
+                "description": "Mean reversion: buy at lower band, sell at upper band",
+                "params": [
+                    {"name": "period", "type": "int", "default": 20, "min": 10, "max": 50},
+                    {"name": "num_std", "type": "float", "default": 2.0, "min": 1.0, "max": 3.0},
+                ],
+            },
+            {
+                "id": "mean_reversion",
+                "name": "Mean Reversion",
+                "description": "Buy when Z-score is below threshold, sell when above",
+                "params": [
+                    {"name": "lookback", "type": "int", "default": 20, "min": 10, "max": 60},
+                    {"name": "entry_z", "type": "float", "default": -1.5, "min": -3.0, "max": -0.5},
+                    {"name": "exit_z", "type": "float", "default": 1.5, "min": 0.5, "max": 3.0},
+                ],
+            },
+            {
+                "id": "momentum",
+                "name": "Momentum",
+                "description": "Buy when momentum over lookback period is positive",
+                "params": [
+                    {"name": "lookback", "type": "int", "default": 20, "min": 5, "max": 60},
+                    {"name": "threshold", "type": "float", "default": 0.0, "min": -0.05, "max": 0.1},
+                ],
+            },
+            {
+                "id": "ml_transformer",
+                "name": "ML Transformer",
+                "description": "Transformer model predicts P(up X% in N days). Walk-forward training, no leakage.",
+                "params": [
+                    {"name": "target_return_pct", "type": "float", "default": 2.0, "min": 0.5, "max": 10.0},
+                    {"name": "horizon_days", "type": "int", "default": 5, "min": 1, "max": 30},
+                    {"name": "seq_len", "type": "int", "default": 30, "min": 10, "max": 60},
+                    {"name": "retrain_every", "type": "int", "default": 60, "min": 20, "max": 120},
+                    {"name": "prob_threshold", "type": "float", "default": 0.5, "min": 0.3, "max": 0.8},
+                    {"name": "epochs", "type": "int", "default": 30, "min": 10, "max": 100},
+                ],
+            },
+        ]
+    }
+
+
+def _sanitize(obj):
+    """Replace NaN/Inf with JSON-safe values."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0
+        return obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
+@app.post("/api/backtest")
+def backtest(req: BacktestRequest):
+    """Run a single strategy backtest."""
+    try:
+        df = fetch_stock_data(req.symbol, period=req.period)
+        strategy = StrategyType(req.strategy)
+        config = BacktestConfig(
+            strategy=strategy,
+            symbol=req.symbol,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            initial_capital=req.initial_capital,
+            commission_pct=req.commission_pct,
+            position_size=req.position_size,
+            params=req.params,
+        )
+        result = run_backtest(df, config)
+        return _sanitize(asdict(result))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/compare")
+def compare_strategies(req: CompareRequest):
+    """Run multiple strategies on the same data for comparison."""
+    try:
+        df = fetch_stock_data(req.symbol, period=req.period)
+        results = []
+        for strategy_id in req.strategies:
+            strategy = StrategyType(strategy_id)
+            params = req.params_per_strategy.get(strategy_id, {})
+            config = BacktestConfig(
+                strategy=strategy,
+                symbol=req.symbol,
+                start_date=req.start_date,
+                end_date=req.end_date,
+                initial_capital=req.initial_capital,
+                commission_pct=req.commission_pct,
+                params=params,
+            )
+            result = run_backtest(df, config)
+            results.append(_sanitize(asdict(result)))
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/screener/lists")
+def get_screener_lists():
+    from .stock_lists import LISTS
+    result = []
+    for key, val in LISTS.items():
+        group = "Sectors" if key.startswith("sector_") else "Markets"
+        result.append({"id": key, "name": val["name"], "count": len(val["symbols"]), "group": group})
+    return {"lists": result}
+
+
+@app.post("/api/screener")
+def screener(req: ScreenerRequest):
+    """Professional screener with cached batch download, technicals + fundamentals."""
+    from .backtester import STRATEGY_MAP
+    from .stock_lists import LISTS
+    from .cache import batch_fetch_prices, fetch_fundamentals_cached
+    from ta.momentum import RSIIndicator
+    from ta.trend import MACD as MACD_Indicator
+    from ta.volatility import BollingerBands
+    import numpy as np
+    from concurrent.futures import ThreadPoolExecutor
+
+    stock_list = LISTS.get(req.list_id)
+    if not stock_list:
+        raise HTTPException(status_code=400, detail=f"Unknown list: {req.list_id}")
+
+    symbols = stock_list["symbols"]
+
+    # Batch fetch all prices (cached)
+    price_data = batch_fetch_prices(symbols, period="2y")
+
+    # Fetch fundamentals in parallel (cached, so mostly instant after first run)
+    fund_data = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(fetch_fundamentals_cached, s): s for s in symbols}
+        for future in futures:
+            s = futures[future]
+            try:
+                fund_data[s] = future.result(timeout=10)
+            except Exception:
+                fund_data[s] = {"name": s, "sector": "", "industry": ""}
+
+    results = []
+    for symbol in symbols:
+        try:
+            df = price_data.get(symbol)
+            if df is None or len(df) < 50:
+                continue
+
+            close = df["close"]
+            high = df["high"]
+            low = df["low"]
+            volume = df["volume"]
+            fund = fund_data.get(symbol, {})
+
+            price = float(close.iloc[-1])
+            prev_close = float(close.iloc[-2]) if len(close) > 1 else price
+            change_1d = (price / prev_close - 1) * 100 if prev_close else 0
+            change_5d = (price / float(close.iloc[-6]) - 1) * 100 if len(close) > 5 else 0
+            change_20d = (price / float(close.iloc[-21]) - 1) * 100 if len(close) > 20 else 0
+            change_60d = (price / float(close.iloc[-61]) - 1) * 100 if len(close) > 60 else 0
+
+            high_52w = float(high.iloc[-252:].max()) if len(high) >= 252 else float(high.max())
+            low_52w = float(low.iloc[-252:].min()) if len(low) >= 252 else float(low.min())
+            pct_from_52w_high = (price / high_52w - 1) * 100
+
+            rsi = RSIIndicator(close, window=14).rsi()
+            rsi_val = float(rsi.iloc[-1]) if not np.isnan(rsi.iloc[-1]) else 50
+
+            macd_ind = MACD_Indicator(close)
+            macd_hist = float(macd_ind.macd_diff().iloc[-1]) if not np.isnan(macd_ind.macd_diff().iloc[-1]) else 0
+            macd_prev = float(macd_ind.macd_diff().iloc[-2]) if len(macd_ind.macd_diff()) > 1 and not np.isnan(macd_ind.macd_diff().iloc[-2]) else 0
+            macd_trend = "rising" if macd_hist > macd_prev else "falling"
+
+            bb = BollingerBands(close, window=20, window_dev=2)
+            bb_upper = float(bb.bollinger_hband().iloc[-1])
+            bb_lower = float(bb.bollinger_lband().iloc[-1])
+            bb_pos = (price - bb_lower) / (bb_upper - bb_lower) if (bb_upper - bb_lower) > 0 else 0.5
+
+            vol_sma = float(volume.rolling(20).mean().iloc[-1])
+            vol_ratio = float(volume.iloc[-1]) / vol_sma if vol_sma > 0 else 1.0
+
+            returns = close.pct_change().dropna()
+            volatility = float(returns.iloc[-20:].std() * np.sqrt(252) * 100) if len(returns) >= 20 else 0
+
+            sma_20 = float(close.rolling(20).mean().iloc[-1])
+            sma_50 = float(close.rolling(50).mean().iloc[-1]) if len(close) >= 50 else sma_20
+            sma_200 = float(close.rolling(200).mean().iloc[-1]) if len(close) >= 200 else sma_50
+
+            signals = {}
+            buy_count = 0
+            for strategy_id in req.strategies:
+                try:
+                    strategy = StrategyType(strategy_id)
+                    if strategy in STRATEGY_MAP:
+                        sig_series = STRATEGY_MAP[strategy](df, {})
+                        current_signal = int(sig_series.iloc[-1])
+                        signals[strategy_id] = current_signal
+                        if current_signal == 1:
+                            buy_count += 1
+                except Exception:
+                    signals[strategy_id] = 0
+
+            spark_data = close.iloc[-60:].tolist() if len(close) >= 60 else close.tolist()
+
+            results.append({
+                "symbol": symbol,
+                "name": fund.get("name", symbol),
+                "sector": fund.get("sector", ""),
+                "industry": fund.get("industry", ""),
+                "price": round(price, 2),
+                "change_1d": round(change_1d, 2),
+                "change_5d": round(change_5d, 2),
+                "change_20d": round(change_20d, 2),
+                "change_60d": round(change_60d, 2),
+                "high_52w": round(high_52w, 2),
+                "low_52w": round(low_52w, 2),
+                "pct_from_52w_high": round(pct_from_52w_high, 1),
+                "rsi": round(rsi_val, 1),
+                "macd_hist": round(macd_hist, 3),
+                "macd_trend": macd_trend,
+                "bb_pos": round(bb_pos, 2),
+                "vol_ratio": round(vol_ratio, 2),
+                "volatility": round(volatility, 1),
+                "above_sma20": price > sma_20,
+                "above_sma50": price > sma_50,
+                "above_sma200": price > sma_200,
+                "signals": signals,
+                "buy_count": buy_count,
+                "total_strategies": len(req.strategies),
+                "sparkline": [round(float(v), 2) for v in spark_data],
+                # Fundamentals
+                "market_cap": fund.get("market_cap"),
+                "pe_ratio": fund.get("pe_ratio"),
+                "forward_pe": fund.get("forward_pe"),
+                "eps": fund.get("eps"),
+                "dividend_yield": fund.get("dividend_yield"),
+                "beta": fund.get("beta"),
+                "profit_margin": fund.get("profit_margin"),
+                "revenue_growth": fund.get("revenue_growth"),
+                "earnings_growth": fund.get("earnings_growth"),
+                "short_ratio": fund.get("short_ratio"),
+                "short_pct_float": fund.get("short_pct_float"),
+                "insider_pct": fund.get("insider_pct"),
+                "institution_pct": fund.get("institution_pct"),
+                "price_to_book": fund.get("price_to_book"),
+                "debt_to_equity": fund.get("debt_to_equity"),
+                "current_ratio": fund.get("current_ratio"),
+                "return_on_equity": fund.get("return_on_equity"),
+            })
+        except Exception:
+            continue
+
+    results.sort(key=lambda x: (-x["buy_count"], -x.get("change_5d", 0)))
+    return {"results": _sanitize(results), "list_name": stock_list["name"]}
+
+
+@app.get("/api/stock/{symbol}/detail")
+def stock_detail(symbol: str):
+    """Detailed stock info with chart data."""
+    import numpy as np
+    from ta.momentum import RSIIndicator
+    from ta.trend import MACD as MACD_Indicator
+    from .cache import fetch_price_cached, fetch_fundamentals_cached
+
+    try:
+        df = fetch_price_cached(symbol, period="2y")
+        if len(df) < 10:
+            raise ValueError("Not enough data")
+
+        fund = fetch_fundamentals_cached(symbol)
+        close = df["close"]
+        price = float(close.iloc[-1])
+
+        chart = []
+        sma_data = {}
+        for period in [20, 50, 200]:
+            sma_data[period] = close.rolling(period).mean()
+
+        for i in range(len(df)):
+            row = {
+                "date": df.index[i].strftime("%Y-%m-%d"),
+                "open": round(float(df["open"].iloc[i]), 2),
+                "high": round(float(df["high"].iloc[i]), 2),
+                "low": round(float(df["low"].iloc[i]), 2),
+                "close": round(float(df["close"].iloc[i]), 2),
+                "volume": int(df["volume"].iloc[i]),
+            }
+            for period in [20, 50, 200]:
+                val = sma_data[period].iloc[i]
+                row[f"sma_{period}"] = round(float(val), 2) if not np.isnan(val) else None
+            chart.append(row)
+
+        rsi = RSIIndicator(close, window=14).rsi()
+        macd_ind = MACD_Indicator(close)
+
+        perf = {}
+        for label, days in [("1D", 1), ("5D", 5), ("1M", 21), ("3M", 63), ("6M", 126), ("1Y", 252)]:
+            if len(close) > days:
+                perf[label] = round((price / float(close.iloc[-days - 1]) - 1) * 100, 2)
+
+        returns = close.pct_change().dropna()
+
+        return _sanitize({
+            "symbol": symbol,
+            "name": fund.get("name", symbol),
+            "sector": fund.get("sector", "—"),
+            "industry": fund.get("industry", "—"),
+            "price": round(price, 2),
+            "performance": perf,
+            "chart": chart,
+            # Fundamentals
+            "market_cap": fund.get("market_cap"),
+            "pe_ratio": fund.get("pe_ratio"),
+            "forward_pe": fund.get("forward_pe"),
+            "eps": fund.get("eps"),
+            "dividend_yield": fund.get("dividend_yield"),
+            "beta": fund.get("beta"),
+            "profit_margin": fund.get("profit_margin"),
+            "revenue_growth": fund.get("revenue_growth"),
+            "earnings_growth": fund.get("earnings_growth"),
+            "short_ratio": fund.get("short_ratio"),
+            "short_pct_float": fund.get("short_pct_float"),
+            "insider_pct": fund.get("insider_pct"),
+            "institution_pct": fund.get("institution_pct"),
+            "price_to_book": fund.get("price_to_book"),
+            "debt_to_equity": fund.get("debt_to_equity"),
+            "current_ratio": fund.get("current_ratio"),
+            "return_on_equity": fund.get("return_on_equity"),
+            # Technical
+            "high_52w": fund.get("fifty_two_week_high") or round(float(df["high"].max()), 2),
+            "low_52w": fund.get("fifty_two_week_low") or round(float(df["low"].min()), 2),
+            "avg_volume": fund.get("avg_volume"),
+            "volatility": round(float(returns.iloc[-20:].std() * np.sqrt(252) * 100), 1) if len(returns) >= 20 else 0,
+            "rsi": round(float(rsi.iloc[-1]), 1) if not np.isnan(rsi.iloc[-1]) else 50,
+            "macd": round(float(macd_ind.macd().iloc[-1]), 3) if not np.isnan(macd_ind.macd().iloc[-1]) else 0,
+            "macd_signal": round(float(macd_ind.macd_signal().iloc[-1]), 3) if not np.isnan(macd_ind.macd_signal().iloc[-1]) else 0,
+            "macd_hist": round(float(macd_ind.macd_diff().iloc[-1]), 3) if not np.isnan(macd_ind.macd_diff().iloc[-1]) else 0,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/cache/clear")
+def clear_cache():
+    from .cache import clear_cache as _clear
+    _clear()
+    return {"status": "cleared"}
+
+
+# ─── NEWS ───
+
+@app.get("/api/news")
+def get_news(symbols: str = "AAPL,MSFT,GOOGL,AMZN,NVDA,TSLA,META,^GSPC"):
+    """Fetch news for given symbols. Returns deduplicated, date-sorted articles."""
+    import yfinance as yf
+    from datetime import datetime
+
+    symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
+    seen = set()
+    articles = []
+
+    for sym in symbol_list[:15]:  # limit to avoid slow response
+        try:
+            ticker = yf.Ticker(sym)
+            news = ticker.news
+            if not news:
+                continue
+            for item in news:
+                content = item.get("content", {})
+                title = content.get("title", "")
+                if not title or title in seen:
+                    continue
+                seen.add(title)
+
+                pub_date = content.get("pubDate", "")
+                provider = content.get("provider", {})
+
+                # Extract thumbnail
+                thumbnail = None
+                resolutions = content.get("thumbnail", {}).get("resolutions", [])
+                if resolutions:
+                    thumbnail = resolutions[0].get("url")
+
+                # Extract canonical URL
+                url = content.get("canonicalUrl", {}).get("url", "")
+
+                # Related tickers
+                tickers = []
+                for fin in content.get("finance", {}).get("stockTickers", []):
+                    tickers.append(fin.get("symbol", ""))
+
+                articles.append({
+                    "title": title,
+                    "url": url,
+                    "source": provider.get("displayName", ""),
+                    "date": pub_date,
+                    "thumbnail": thumbnail,
+                    "tickers": tickers[:5],
+                    "symbol": sym,
+                })
+        except Exception:
+            continue
+
+    # Sort by date descending
+    articles.sort(key=lambda x: x.get("date", ""), reverse=True)
+    return {"articles": articles[:100]}
+
+
+# ─── MARKET ANALYSIS ───
+
+MARKET_TICKERS = {
+    "indices": {
+        "S&P 500": "^GSPC",
+        "NASDAQ": "^IXIC",
+        "Dow Jones": "^DJI",
+        "TSX Composite": "^GSPTSE",
+        "Russell 2000": "^RUT",
+        "VIX": "^VIX",
+    },
+    "commodities": {
+        "Crude Oil (WTI)": "CL=F",
+        "Gold": "GC=F",
+        "Silver": "SI=F",
+        "Natural Gas": "NG=F",
+        "Copper": "HG=F",
+    },
+    "bonds": {
+        "US 10Y Yield": "^TNX",
+        "US 2Y Yield": "^IRX",
+        "US 30Y Yield": "^TYX",
+    },
+    "currencies": {
+        "USD/CAD": "CAD=X",
+        "EUR/USD": "EURUSD=X",
+        "USD/JPY": "JPY=X",
+        "Dollar Index": "DX-Y.NYB",
+    },
+    "crypto": {
+        "Bitcoin": "BTC-USD",
+        "Ethereum": "ETH-USD",
+    },
+    "sectors": {
+        "Technology": "XLK",
+        "Healthcare": "XLV",
+        "Financials": "XLF",
+        "Energy": "XLE",
+        "Consumer Disc.": "XLY",
+        "Consumer Staples": "XLP",
+        "Industrials": "XLI",
+        "Real Estate": "XLRE",
+        "Utilities": "XLU",
+        "Materials": "XLB",
+        "Comm. Services": "XLC",
+    },
+    "housing": {
+        "Real Estate ETF": "VNQ",
+        "Homebuilders": "XHB",
+    },
+}
+
+
+@app.get("/api/market/overview")
+def market_overview():
+    """Full market overview: indices, commodities, bonds, currencies, sectors, crypto."""
+    import yfinance as yf
+    import numpy as np
+    from .cache import fetch_price_cached
+
+    result = {}
+
+    for category, tickers in MARKET_TICKERS.items():
+        cat_data = []
+        for name, symbol in tickers.items():
+            try:
+                df = fetch_price_cached(symbol, period="1y")
+                if len(df) < 2:
+                    continue
+
+                close = df["close"]
+                price = float(close.iloc[-1])
+                prev = float(close.iloc[-2])
+                change_1d = (price / prev - 1) * 100
+
+                # Period returns
+                changes = {}
+                for label, days in [("1W", 5), ("1M", 21), ("3M", 63), ("6M", 126), ("YTD", None), ("1Y", 252)]:
+                    if label == "YTD":
+                        # Find first trading day of year
+                        year_start = df[df.index.year == df.index[-1].year]
+                        if len(year_start) > 0:
+                            changes["YTD"] = round((price / float(year_start["close"].iloc[0]) - 1) * 100, 2)
+                    elif len(close) > days:
+                        changes[label] = round((price / float(close.iloc[-days - 1]) - 1) * 100, 2)
+
+                # Sparkline (last 60 trading days)
+                spark = [round(float(v), 2) for v in close.iloc[-60:].tolist()]
+
+                cat_data.append({
+                    "name": name,
+                    "symbol": symbol,
+                    "price": round(price, 2),
+                    "change_1d": round(change_1d, 2),
+                    "changes": changes,
+                    "sparkline": spark,
+                })
+            except Exception:
+                continue
+
+        result[category] = cat_data
+
+    return _sanitize(result)
+
+
+# ─── CRYPTO ───
+
+CRYPTO_TICKERS = [
+    ("Bitcoin", "BTC-USD"), ("Ethereum", "ETH-USD"), ("Tether", "USDT-USD"),
+    ("BNB", "BNB-USD"), ("Solana", "SOL-USD"), ("XRP", "XRP-USD"),
+    ("USDC", "USDC-USD"), ("Cardano", "ADA-USD"), ("Avalanche", "AVAX-USD"),
+    ("Dogecoin", "DOGE-USD"), ("Polkadot", "DOT-USD"), ("Chainlink", "LINK-USD"),
+    ("TRON", "TRX-USD"), ("Polygon", "MATIC-USD"), ("Toncoin", "TON11419-USD"),
+    ("Shiba Inu", "SHIB-USD"), ("Litecoin", "LTC-USD"), ("Bitcoin Cash", "BCH-USD"),
+    ("Uniswap", "UNI7083-USD"), ("Stellar", "XLM-USD"),
+    ("NEAR", "NEAR-USD"), ("Cosmos", "ATOM-USD"), ("Aptos", "APT21794-USD"),
+    ("Filecoin", "FIL-USD"), ("Arbitrum", "ARB11841-USD"),
+    ("Optimism", "OP-USD"), ("Aave", "AAVE-USD"), ("Render", "RNDR-USD"),
+    ("Sui", "SUI20947-USD"), ("Pepe", "PEPE24478-USD"),
+]
+
+
+@app.get("/api/crypto")
+def crypto_overview():
+    """Crypto dashboard data — price, volume, market cap, changes, sparklines."""
+    import yfinance as yf
+    import numpy as np
+    from .cache import fetch_price_cached
+
+    results = []
+    for name, symbol in CRYPTO_TICKERS:
+        try:
+            df = fetch_price_cached(symbol, period="6mo")
+            if len(df) < 2:
+                continue
+
+            close = df["close"]
+            volume = df["volume"]
+            price = float(close.iloc[-1])
+            prev = float(close.iloc[-2])
+
+            # Get market cap from yfinance info (cached)
+            from .cache import fetch_fundamentals_cached
+            fund = fetch_fundamentals_cached(symbol)
+            mcap = fund.get("market_cap")
+
+            # Volume 24h (latest bar)
+            vol_24h = float(volume.iloc[-1]) * price if volume.iloc[-1] else None
+
+            changes = {}
+            for label, days in [("1h", None), ("1D", 1), ("1W", 7), ("1M", 30), ("3M", 90), ("6M", 180)]:
+                if days and len(close) > days:
+                    changes[label] = round((price / float(close.iloc[-days - 1]) - 1) * 100, 2)
+
+            spark = [round(float(v), 2) for v in close.iloc[-30:].tolist()]
+
+            results.append({
+                "name": name,
+                "symbol": symbol.replace("-USD", ""),
+                "price": round(price, 6 if price < 1 else 2),
+                "change_1d": round((price / prev - 1) * 100, 2),
+                "changes": changes,
+                "market_cap": mcap,
+                "volume_24h": round(vol_24h, 0) if vol_24h else None,
+                "sparkline": spark,
+            })
+        except Exception:
+            continue
+
+    return {"coins": _sanitize(results)}

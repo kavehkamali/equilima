@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+yfinance
+pandas
+numpy
+torch
+scikit-learn
+ta
+pydantic
+python-dateutil
