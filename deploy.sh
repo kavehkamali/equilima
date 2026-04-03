@@ -47,9 +47,12 @@ echo "[5/5] Starting server..."
 pkill -f "uvicorn app.main" 2>/dev/null || true
 sleep 1
 
-# Start server on port 8080 (use 80 if you have permissions)
+# Load environment variables if they exist
+[ -f ~/.equilima_env ] && source ~/.equilima_env
+
+# Start server
 cd backend
-nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8080 > ~/backtestlab.log 2>&1 &
+nohup ~/.local/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080 > ~/backtestlab.log 2>&1 &
 
 echo ""
 echo "=== Deployed! ==="

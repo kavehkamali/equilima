@@ -7,6 +7,7 @@ Stores in SQLite. Admin-only access.
 import sqlite3
 import time
 import json
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from collections import Counter
@@ -17,8 +18,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 DB_PATH = Path.home() / ".equilima_data" / "equilima.db"
 
 # Admin credentials (hashed in production, simple check for now)
-ADMIN_USER = "admin"
-ADMIN_PASS = "changeme"
+ADMIN_USER = os.environ.get("EQUILIMA_ADMIN_USER", "admin")
+ADMIN_PASS = os.environ.get("EQUILIMA_ADMIN_PASS", "changeme")
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 security = HTTPBearer(auto_error=False)
