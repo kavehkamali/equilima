@@ -51,6 +51,43 @@ export async function checkInteraction() {
   return res.json();
 }
 
+// ─── Analytics tracking ───
+let _sessionId = sessionStorage.getItem('eq_sid');
+if (!_sessionId) { _sessionId = Math.random().toString(36).slice(2); sessionStorage.setItem('eq_sid', _sessionId); }
+
+export function trackPageView(tab) {
+  const user = getStoredUser();
+  fetch(`${BASE}/admin/track`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: window.location.pathname, tab, session_id: _sessionId, user_id: user?.id }),
+  }).catch(() => {});
+}
+
+export async function adminLogin(username, password) {
+  const res = await fetch(`${BASE}/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Login failed');
+  localStorage.setItem('eq_admin_token', data.token);
+  return data;
+}
+
+export async function fetchAdminStats(days = 30) {
+  const token = localStorage.getItem('eq_admin_token');
+  const res = await fetch(`${BASE}/admin/stats?days=${days}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    if (res.status === 401) { localStorage.removeItem('eq_admin_token'); throw new Error('Session expired'); }
+    throw new Error('Failed to load stats');
+  }
+  return res.json();
+}
+
 export async function fetchStrategies() {
   const res = await fetch(`${BASE}/strategies`);
   if (!res.ok) throw new Error('Failed to fetch strategies');

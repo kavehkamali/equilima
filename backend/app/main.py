@@ -16,11 +16,13 @@ from .backtester import BacktestConfig, StrategyType, run_backtest
 from .terminal import router as terminal_router
 from .research import router as research_router
 from .auth import router as auth_router
+from .analytics import router as analytics_router
 
 app = FastAPI(title="Stock Backtesting Dashboard API")
 app.include_router(terminal_router)
 app.include_router(research_router)
 app.include_router(auth_router)
+app.include_router(analytics_router)
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchStrategies, compareStrategies, getStoredUser, signout, checkInteraction } from './api';
+import { fetchStrategies, compareStrategies, getStoredUser, signout, checkInteraction, trackPageView } from './api';
 import DashboardPanel from './components/DashboardPanel';
 import ComparePanel from './components/ComparePanel';
 import ScreenerPanel from './components/ScreenerPanel';
@@ -48,12 +48,17 @@ function App() {
     } catch {}
   }, [user, softPromptShown]);
 
-  // Only track after user interacts (not on first page load)
+  // Track page views
+  useEffect(() => {
+    trackPageView(activeTab);
+  }, [activeTab]);
+
+  // Only track auth interactions after user interacts (not on first page load)
   const hasInteracted = useRef(false);
   useEffect(() => {
     if (!hasInteracted.current) {
       hasInteracted.current = true;
-      return; // skip initial mount
+      return;
     }
     trackInteraction();
   }, [activeTab, trackInteraction]);
@@ -67,6 +72,9 @@ function App() {
   const handleSignout = () => {
     signout();
     setUser(null);
+    setShowAuth(false);
+    setForceAuth(false);
+    setSoftPromptShown(true); // don't show prompt again after signout
   };
 
   const handleCompare = async (params) => {
