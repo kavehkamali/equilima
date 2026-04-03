@@ -22,28 +22,58 @@ function extractTickers(text) {
 }
 
 // ─── Markdown renderer ───
-function boldify(text) {
+function inlineFormat(text) {
   return text
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong class="text-white font-semibold"><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
-    .replace(/`(.+?)`/g, '<code class="bg-white/5 px-1 rounded text-indigo-300 text-[10px]">$1</code>');
+    .replace(/__(.+?)__/g, '<strong class="text-white font-semibold">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em class="text-gray-200">$1</em>')
+    .replace(/_(.+?)_/g, '<em class="text-gray-200">$1</em>')
+    .replace(/`(.+?)`/g, '<code class="bg-white/5 px-1 rounded text-indigo-300 text-[10px]">$1</code>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" class="text-indigo-400 hover:underline">$1</a>');
 }
 
 function RenderMarkdown({ text }) {
   if (!text) return null;
+  // Remove <think>...</think> blocks (DeepSeek artifacts)
+  let clean = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
   return (
     <div>
-      {text.split('\n').map((line, i) => {
-        if (line.startsWith('### ')) return <h3 key={i} className="text-sm font-bold text-white mt-3 mb-1">{line.slice(4)}</h3>;
-        if (line.startsWith('## ')) return <h2 key={i} className="text-base font-bold text-white mt-3 mb-1">{line.slice(3)}</h2>;
-        if (line.startsWith('# ')) return <h1 key={i} className="text-lg font-bold text-white mt-3 mb-1">{line.slice(2)}</h1>;
-        if (line.startsWith('- ') || line.startsWith('* ')) return (
+      {clean.split('\n').map((line, i) => {
+        const trimmed = line.trimStart();
+        // Headings
+        if (trimmed.startsWith('#### ')) return <h4 key={i} className="text-xs font-bold text-white mt-2 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(5)) }} />;
+        if (trimmed.startsWith('### ')) return <h3 key={i} className="text-sm font-bold text-white mt-3 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(4)) }} />;
+        if (trimmed.startsWith('## ')) return <h2 key={i} className="text-base font-bold text-white mt-3 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(3)) }} />;
+        if (trimmed.startsWith('# ')) return <h1 key={i} className="text-lg font-bold text-white mt-3 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(2)) }} />;
+        // Horizontal rule
+        if (/^[-*_]{3,}\s*$/.test(trimmed)) return <hr key={i} className="border-white/5 my-2" />;
+        // Unordered list
+        if (/^[-*+]\s/.test(trimmed)) return (
           <div key={i} className="flex gap-2 text-xs text-gray-300 ml-2 my-0.5">
-            <span className="text-indigo-400 mt-0.5">•</span>
-            <span dangerouslySetInnerHTML={{ __html: boldify(line.slice(2)) }} />
+            <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
+            <span dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.replace(/^[-*+]\s/, '')) }} />
           </div>
         );
-        if (line.trim() === '') return <div key={i} className="h-2" />;
-        return <p key={i} className="text-xs text-gray-300 leading-relaxed my-1" dangerouslySetInnerHTML={{ __html: boldify(line) }} />;
+        // Numbered list
+        if (/^\d+\.\s/.test(trimmed)) {
+          const num = trimmed.match(/^(\d+)\./)[1];
+          return (
+            <div key={i} className="flex gap-2 text-xs text-gray-300 ml-2 my-0.5">
+              <span className="text-indigo-400 mt-0.5 shrink-0 w-4 text-right">{num}.</span>
+              <span dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.replace(/^\d+\.\s/, '')) }} />
+            </div>
+          );
+        }
+        // Blockquote
+        if (trimmed.startsWith('> ')) return (
+          <div key={i} className="border-l-2 border-indigo-500/30 pl-3 my-1 text-xs text-gray-400 italic" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(2)) }} />
+        );
+        // Empty line
+        if (trimmed === '') return <div key={i} className="h-2" />;
+        // Regular paragraph
+        return <p key={i} className="text-xs text-gray-300 leading-relaxed my-1" dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />;
       })}
     </div>
   );

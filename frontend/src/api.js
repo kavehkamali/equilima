@@ -124,6 +124,42 @@ export async function agentHealth() {
   } catch { return { status: 'offline' }; }
 }
 
+export async function forgotPassword(email) {
+  const res = await fetch(`${BASE}/auth/forgot-password`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  return res.json();
+}
+
+export async function resetPassword(token, password) {
+  const res = await fetch(`${BASE}/auth/reset-password`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Reset failed');
+  return data;
+}
+
+export async function verifyEmail(token) {
+  const res = await fetch(`${BASE}/auth/verify-email`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Verification failed');
+  return data;
+}
+
+export async function resendVerification() {
+  const token = getToken();
+  const res = await fetch(`${BASE}/auth/resend-verification`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  return res.json();
+}
+
 export async function fetchStrategies() {
   const res = await fetch(`${BASE}/strategies`);
   if (!res.ok) throw new Error('Failed to fetch strategies');
