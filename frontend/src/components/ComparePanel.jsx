@@ -118,16 +118,16 @@ export default function ComparePanel({ strategies, onCompare, results, loading }
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
             <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Date Range</label>
             <div className="grid grid-cols-2 gap-2">
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+              <input type="text" placeholder="YYYY-MM-DD" value={startDate} onChange={e => setStartDate(e.target.value)}
                 className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500/50" />
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+              <input type="text" placeholder="YYYY-MM-DD" value={endDate} onChange={e => setEndDate(e.target.value)}
                 className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500/50" />
             </div>
           </div>
 
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
             <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Initial Capital ($)</label>
-            <input type="number" value={capital} onChange={e => setCapital(Number(e.target.value))}
+            <input type="text" inputMode="decimal" value={capital} onChange={e => setCapital(Number(e.target.value))}
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500/50" />
           </div>
 

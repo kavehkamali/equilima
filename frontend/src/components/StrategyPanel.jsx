@@ -135,13 +135,13 @@ export default function StrategyPanel({ strategies, onRun, loading }) {
         </label>
         <div className="grid grid-cols-2 gap-2">
           <input
-            type="date"
+            type="text" placeholder="YYYY-MM-DD"
             value={startDate}
             onChange={e => setStartDate(e.target.value)}
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500/50"
           />
           <input
-            type="date"
+            type="text" placeholder="YYYY-MM-DD"
             value={endDate}
             onChange={e => setEndDate(e.target.value)}
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500/50"
@@ -156,7 +156,7 @@ export default function StrategyPanel({ strategies, onRun, loading }) {
             Initial Capital ($)
           </label>
           <input
-            type="number"
+            type="text" inputMode="decimal"
             value={capital}
             onChange={e => setCapital(Number(e.target.value))}
             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500/50"
@@ -167,7 +167,7 @@ export default function StrategyPanel({ strategies, onRun, loading }) {
             Commission (%)
           </label>
           <input
-            type="number"
+            type="text" inputMode="decimal"
             step="0.01"
             value={commission}
             onChange={e => setCommission(Number(e.target.value))}

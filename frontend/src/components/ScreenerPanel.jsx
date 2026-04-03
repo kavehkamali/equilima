@@ -147,10 +147,10 @@ function RangeRow({ label, value_min, value_max, step = 1, onChange }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-[10px] text-gray-500 w-20 shrink-0">{label}</span>
-      <input type="number" step={step} value={value_min} onChange={e => onChange('min', parseFloat(e.target.value) || 0)}
+      <input type="text" inputMode="decimal" value={value_min} onChange={e => onChange('min', parseFloat(e.target.value) || 0)}
         className="w-16 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[10px] text-white text-center focus:outline-none focus:border-indigo-500/50" />
       <span className="text-gray-600 text-[10px]">to</span>
-      <input type="number" step={step} value={value_max} onChange={e => onChange('max', parseFloat(e.target.value) || 0)}
+      <input type="text" inputMode="decimal" value={value_max} onChange={e => onChange('max', parseFloat(e.target.value) || 0)}
         className="w-16 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[10px] text-white text-center focus:outline-none focus:border-indigo-500/50" />
     </div>
   );
