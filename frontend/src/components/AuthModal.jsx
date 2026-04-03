@@ -2,6 +2,30 @@ import { useState } from 'react';
 import { X, Loader2, Eye, EyeOff, Check, AlertCircle } from 'lucide-react';
 import { signup, signin } from '../api';
 
+function Req({ met, children }) {
+  return (
+    <div className={`flex items-center gap-1.5 text-[10px] ${met ? 'text-emerald-400' : 'text-gray-500'}`}>
+      {met ? <Check className="w-3 h-3" /> : <div className="w-3 h-3 rounded-full border border-gray-600" />}
+      {children}
+    </div>
+  );
+}
+
+function CustomCheck({ checked, onChange, children }) {
+  return (
+    <div className="flex items-start gap-2.5 cursor-pointer group" onClick={() => onChange(!checked)}>
+      <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+        checked ? 'bg-indigo-500 border-indigo-500' : 'border-gray-600 group-hover:border-gray-400'
+      }`}>
+        {checked && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+      </div>
+      <span className="text-xs text-gray-400 group-hover:text-gray-300 leading-relaxed select-none">
+        {children}
+      </span>
+    </div>
+  );
+}
+
 export default function AuthModal({ onClose, onAuth, mode: initialMode = 'signup', message, forced = false }) {
   const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState('');
@@ -13,14 +37,12 @@ export default function AuthModal({ onClose, onAuth, mode: initialMode = 'signup
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Validation
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const passwordValid = password.length >= 8;
   const passwordHasUpper = /[A-Z]/.test(password);
   const passwordHasNumber = /[0-9]/.test(password);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setError(null);
 
     if (!emailValid) {
@@ -55,14 +77,9 @@ export default function AuthModal({ onClose, onAuth, mode: initialMode = 'signup
     }
   };
 
-  function Req({ met, children }) {
-    return (
-      <div className={`flex items-center gap-1.5 text-[10px] ${met ? 'text-emerald-400' : 'text-gray-500'}`}>
-        {met ? <Check className="w-3 h-3" /> : <div className="w-3 h-3 rounded-full border border-gray-600" />}
-        {children}
-      </div>
-    );
-  }
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSubmit();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={forced ? undefined : onClose}>
@@ -82,7 +99,8 @@ export default function AuthModal({ onClose, onAuth, mode: initialMode = 'signup
             {!message && <p className="text-sm text-gray-500 mt-1">{mode === 'signup' ? 'Get unlimited access to Equilima' : 'Sign in to your account'}</p>}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          {/* No <form> element — pure div + onClick to avoid ALL browser validation */}
+          <div className="space-y-4" onKeyDown={handleKeyDown}>
             {mode === 'signup' && (
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Name</label>
@@ -95,7 +113,7 @@ export default function AuthModal({ onClose, onAuth, mode: initialMode = 'signup
             <div>
               <label className="block text-xs text-gray-400 mb-1">Email</label>
               <input type="text" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="name@example.com" autoComplete="off"
+                placeholder="name@example.com"
                 className={`w-full bg-white/5 border rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none transition-colors ${
                   email && !emailValid ? 'border-red-500/50 focus:border-red-500/80' : 'border-white/10 focus:border-indigo-500/50'
                 }`} />
@@ -110,7 +128,7 @@ export default function AuthModal({ onClose, onAuth, mode: initialMode = 'signup
               <label className="block text-xs text-gray-400 mb-1">Password</label>
               <div className="relative">
                 <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                  placeholder="Enter password" autoComplete="off"
+                  placeholder="Enter password"
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 pr-10 text-white text-sm focus:outline-none focus:border-indigo-500/50" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
@@ -128,25 +146,17 @@ export default function AuthModal({ onClose, onAuth, mode: initialMode = 'signup
 
             {mode === 'signup' && (
               <div className="space-y-3 pt-1">
-                <label className="flex items-start gap-2.5 cursor-pointer group">
-                  <input type="checkbox" checked={consentPolicy} onChange={e => setConsentPolicy(e.target.checked)}
-                    className="mt-0.5 accent-indigo-500 w-4 h-4 rounded" />
-                  <span className="text-xs text-gray-400 group-hover:text-gray-300 leading-relaxed">
-                    I agree to the{' '}
-                    <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Terms of Service</a>
-                    {' '}and{' '}
-                    <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Privacy Policy</a>
-                    {' '}<span className="text-red-400">*</span>
-                  </span>
-                </label>
+                <CustomCheck checked={consentPolicy} onChange={setConsentPolicy}>
+                  I agree to the{' '}
+                  <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline" onClick={e => e.stopPropagation()}>Terms of Service</a>
+                  {' '}and{' '}
+                  <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline" onClick={e => e.stopPropagation()}>Privacy Policy</a>
+                  {' '}<span className="text-red-400">*</span>
+                </CustomCheck>
 
-                <label className="flex items-start gap-2.5 cursor-pointer group">
-                  <input type="checkbox" checked={consentNewsletter} onChange={e => setConsentNewsletter(e.target.checked)}
-                    className="mt-0.5 accent-indigo-500 w-4 h-4 rounded" />
-                  <span className="text-xs text-gray-400 group-hover:text-gray-300 leading-relaxed">
-                    I'd like to receive market insights, product updates, and newsletters from Equilima via email. You can unsubscribe at any time.
-                  </span>
-                </label>
+                <CustomCheck checked={consentNewsletter} onChange={setConsentNewsletter}>
+                  I'd like to receive market insights, product updates, and newsletters from Equilima via email. You can unsubscribe at any time.
+                </CustomCheck>
               </div>
             )}
 
@@ -157,12 +167,12 @@ export default function AuthModal({ onClose, onAuth, mode: initialMode = 'signup
               </div>
             )}
 
-            <button type="submit" disabled={loading} formNoValidate
+            <button onClick={handleSubmit} disabled={loading}
               className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {mode === 'signup' ? 'Create Account' : 'Sign In'}
             </button>
-          </form>
+          </div>
 
           <div className="text-center mt-4 text-xs text-gray-500">
             {mode === 'signup' ? (
