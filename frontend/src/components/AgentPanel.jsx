@@ -39,50 +39,118 @@ function inlineFormat(text) {
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-indigo-400 hover:underline">$1</a>');
 }
 
+function parseTable(lines, startIdx) {
+  // Collect consecutive table rows starting from startIdx
+  const rows = [];
+  let i = startIdx;
+  while (i < lines.length && lines[i].trimStart().startsWith('|')) {
+    rows.push(lines[i].trimStart());
+    i++;
+  }
+  if (rows.length < 2) return null; // need at least header + separator
+
+  const parseRow = (row) => row.split('|').slice(1, -1).map(c => c.trim());
+
+  const headers = parseRow(rows[0]);
+  // Skip separator row (|---|---|)
+  const dataStart = rows[1].includes('---') ? 2 : 1;
+  const body = rows.slice(dataStart).map(parseRow);
+
+  return { headers, body, endIdx: i };
+}
+
 function RenderMarkdown({ text }) {
   if (!text) return null;
-  // Remove <think>...</think> blocks (DeepSeek artifacts)
   let clean = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  const lines = clean.split('\n');
+  const elements = [];
+  let i = 0;
 
-  return (
-    <div>
-      {clean.split('\n').map((line, i) => {
-        const trimmed = line.trimStart();
-        // Headings
-        if (trimmed.startsWith('#### ')) return <h4 key={i} className="text-xs font-bold text-white mt-2 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(5)) }} />;
-        if (trimmed.startsWith('### ')) return <h3 key={i} className="text-sm font-bold text-white mt-3 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(4)) }} />;
-        if (trimmed.startsWith('## ')) return <h2 key={i} className="text-base font-bold text-white mt-3 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(3)) }} />;
-        if (trimmed.startsWith('# ')) return <h1 key={i} className="text-lg font-bold text-white mt-3 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(2)) }} />;
-        // Horizontal rule
-        if (/^([-]{3,}|[*]{3,}|[_]{3,})\s*$/.test(trimmed) && !/[a-zA-Z]/.test(trimmed)) return <hr key={i} className="border-white/5 my-2" />;
-        // Unordered list
-        if (/^[-*+]\s/.test(trimmed)) return (
-          <div key={i} className="flex gap-2 text-xs text-gray-300 ml-2 my-0.5">
-            <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
-            <span dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.replace(/^[-*+]\s/, '')) }} />
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trimStart();
+
+    // Table detection
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const table = parseTable(lines, i);
+      if (table && table.headers.length > 0) {
+        elements.push(
+          <div key={i} className="overflow-x-auto my-3 rounded-lg border border-white/5">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="border-b border-white/5 bg-white/[0.03]">
+                  {table.headers.map((h, j) => (
+                    <th key={j} className="text-left py-2 px-3 text-gray-400 font-semibold whitespace-nowrap"
+                      dangerouslySetInnerHTML={{ __html: inlineFormat(h) }} />
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {table.body.map((row, ri) => (
+                  <tr key={ri} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                    {row.map((cell, ci) => {
+                      // Color numbers green/red
+                      const numMatch = cell.match(/^([+-]?\d+\.?\d*)\s*%?$/);
+                      const isPositive = numMatch && parseFloat(numMatch[1]) > 0;
+                      const isNegative = numMatch && parseFloat(numMatch[1]) < 0;
+                      const color = isPositive ? 'text-emerald-400' : isNegative ? 'text-red-400' : 'text-gray-300';
+                      return (
+                        <td key={ci} className={`py-1.5 px-3 whitespace-nowrap ${ci === 0 ? 'text-white font-medium' : color}`}
+                          dangerouslySetInnerHTML={{ __html: inlineFormat(cell) }} />
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         );
-        // Numbered list
-        if (/^\d+\.\s/.test(trimmed)) {
-          const num = trimmed.match(/^(\d+)\./)[1];
-          return (
-            <div key={i} className="flex gap-2 text-xs text-gray-300 ml-2 my-0.5">
-              <span className="text-indigo-400 mt-0.5 shrink-0 w-4 text-right">{num}.</span>
-              <span dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.replace(/^\d+\.\s/, '')) }} />
-            </div>
-          );
-        }
-        // Blockquote
-        if (trimmed.startsWith('> ')) return (
-          <div key={i} className="border-l-2 border-indigo-500/30 pl-3 my-1 text-xs text-gray-400 italic" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(2)) }} />
-        );
-        // Empty line
-        if (trimmed === '') return <div key={i} className="h-2" />;
-        // Regular paragraph
-        return <p key={i} className="text-xs text-gray-300 leading-relaxed my-1" dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />;
-      })}
-    </div>
-  );
+        i = table.endIdx;
+        continue;
+      }
+    }
+
+    // Headings
+    if (trimmed.startsWith('#### ')) { elements.push(<h4 key={i} className="text-xs font-bold text-white mt-2 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(5)) }} />); i++; continue; }
+    if (trimmed.startsWith('### ')) { elements.push(<h3 key={i} className="text-sm font-bold text-white mt-3 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(4)) }} />); i++; continue; }
+    if (trimmed.startsWith('## ')) { elements.push(<h2 key={i} className="text-base font-bold text-white mt-3 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(3)) }} />); i++; continue; }
+    if (trimmed.startsWith('# ')) { elements.push(<h1 key={i} className="text-lg font-bold text-white mt-3 mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(2)) }} />); i++; continue; }
+    // Horizontal rule
+    if (/^([-]{3,}|[*]{3,}|[_]{3,})\s*$/.test(trimmed) && !/[a-zA-Z]/.test(trimmed)) { elements.push(<hr key={i} className="border-white/5 my-2" />); i++; continue; }
+    // Unordered list
+    if (/^[-*+]\s/.test(trimmed)) {
+      elements.push(
+        <div key={i} className="flex gap-2 text-xs text-gray-300 ml-2 my-0.5">
+          <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
+          <span dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.replace(/^[-*+]\s/, '')) }} />
+        </div>
+      );
+      i++; continue;
+    }
+    // Numbered list
+    if (/^\d+\.\s/.test(trimmed)) {
+      const num = trimmed.match(/^(\d+)\./)[1];
+      elements.push(
+        <div key={i} className="flex gap-2 text-xs text-gray-300 ml-2 my-0.5">
+          <span className="text-indigo-400 mt-0.5 shrink-0 w-4 text-right">{num}.</span>
+          <span dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.replace(/^\d+\.\s/, '')) }} />
+        </div>
+      );
+      i++; continue;
+    }
+    // Blockquote
+    if (trimmed.startsWith('> ')) {
+      elements.push(<div key={i} className="border-l-2 border-indigo-500/30 pl-3 my-1 text-xs text-gray-400 italic" dangerouslySetInnerHTML={{ __html: inlineFormat(trimmed.slice(2)) }} />);
+      i++; continue;
+    }
+    // Empty line
+    if (trimmed === '') { elements.push(<div key={i} className="h-2" />); i++; continue; }
+    // Regular paragraph
+    elements.push(<p key={i} className="text-xs text-gray-300 leading-relaxed my-1" dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />);
+    i++;
+  }
+
+  return <div>{elements}</div>;
 }
 
 // ─── Ticker insight card with charts ───
