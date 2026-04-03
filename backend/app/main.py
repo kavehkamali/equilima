@@ -754,6 +754,47 @@ def crypto_overview():
     return {"coins": _sanitize(results)}
 
 
+# ─── AI Agent Proxy ───
+import httpx
+
+AGENT_URL = "http://localhost:8888"
+
+@app.post("/api/agent/chat")
+async def agent_chat(request: Request):
+    """Proxy chat to the AI agent on home-linux (full TradingAgents pipeline)."""
+    body = await request.json()
+    try:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            resp = await client.post(f"{AGENT_URL}/chat", json=body)
+            return resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Agent timed out — the analysis is taking too long")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Agent unavailable: {str(e)}")
+
+@app.post("/api/agent/quick")
+async def agent_quick(request: Request):
+    """Proxy quick analysis to AI agent (direct LLM, faster)."""
+    body = await request.json()
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(f"{AGENT_URL}/quick", json=body)
+            return resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Agent timed out")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Agent unavailable: {str(e)}")
+
+@app.get("/api/agent/health")
+async def agent_health():
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{AGENT_URL}/health")
+            return resp.json()
+    except Exception:
+        return {"status": "offline"}
+
+
 # ─── Static file serving for production ───
 STATIC_DIR = Path(__file__).parent.parent.parent / "frontend" / "dist"
 if STATIC_DIR.exists():

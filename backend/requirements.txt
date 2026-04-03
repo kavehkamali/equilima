@@ -10,3 +10,4 @@ pydantic
 python-dateutil
 passlib[bcrypt]
 python-jose[cryptography]
+httpx

@@ -8,12 +8,13 @@ import TerminalPanel from './components/terminal/TerminalPanel';
 import Header from './components/Header';
 import AuthModal from './components/AuthModal';
 import AdminPanel from './components/AdminPanel';
+import AgentPanel from './components/AgentPanel';
 import { BarChart3 } from 'lucide-react';
 
 function App() {
   const [strategies, setStrategies] = useState([]);
   const [isAdmin, setIsAdmin] = useState(window.location.hash === '#admin');
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('agent');
 
   // Listen for hash changes
   useEffect(() => {
@@ -143,6 +144,7 @@ function App() {
               {error}
             </div>
           )}
+          {activeTab === 'agent' && <AgentPanel />}
           {activeTab === 'dashboard' && <DashboardPanel />}
           {activeTab === 'screener' && <ScreenerPanel />}
           {activeTab === 'research' && <ResearchPanel />}

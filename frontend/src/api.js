@@ -88,6 +88,40 @@ export async function fetchAdminStats(days = 30) {
   return res.json();
 }
 
+// ─── AI Agent ───
+export async function agentChat(message, ticker = '') {
+  const res = await fetch(`${BASE}/agent/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, ticker }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Agent unavailable' }));
+    throw new Error(err.detail || 'Agent error');
+  }
+  return res.json();
+}
+
+export async function agentQuick(message, ticker = '') {
+  const res = await fetch(`${BASE}/agent/quick`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, ticker }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Agent unavailable' }));
+    throw new Error(err.detail || 'Agent error');
+  }
+  return res.json();
+}
+
+export async function agentHealth() {
+  try {
+    const res = await fetch(`${BASE}/agent/health`);
+    return res.json();
+  } catch { return { status: 'offline' }; }
+}
+
 export async function fetchStrategies() {
   const res = await fetch(`${BASE}/strategies`);
   if (!res.ok) throw new Error('Failed to fetch strategies');

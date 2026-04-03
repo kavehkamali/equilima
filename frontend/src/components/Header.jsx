@@ -13,6 +13,7 @@ export default function Header({ activeTab, setActiveTab, user, onSignIn, onSign
 
         <nav className="flex gap-0.5 bg-white/5 rounded-lg p-1">
           {[
+            { id: 'agent', label: 'AI Agent' },
             { id: 'dashboard', label: 'Dashboard' },
             { id: 'screener', label: 'Screener' },
             { id: 'research', label: 'Research' },
