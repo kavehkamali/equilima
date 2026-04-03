@@ -294,7 +294,7 @@ export default function AgentPanel({ onNavigate }) {
             <p className="text-xs text-gray-500 max-w-md mx-auto">AI-powered market research assistant</p>
             <div className="flex items-center gap-2 justify-center mt-2">
               <div className={`w-2 h-2 rounded-full ${agentOnline ? 'bg-emerald-400' : agentOnline === false ? 'bg-red-400' : 'bg-yellow-400'}`} />
-              <span className="text-[10px] text-gray-600">{agentOnline ? 'DeepSeek-R1-32B online' : agentOnline === false ? 'Agent offline' : 'Checking...'}</span>
+              <span className="text-[10px] text-gray-600">{agentOnline ? 'Qwen3-14B online' : agentOnline === false ? 'Agent offline' : 'Checking...'}</span>
             </div>
           </div>
         )}
@@ -380,7 +380,7 @@ export default function AgentPanel({ onNavigate }) {
       )}
 
       <div className="shrink-0 px-4 pb-2">
-        <p className="text-[9px] text-gray-700 text-center">Powered by DeepSeek-R1 · Not financial advice</p>
+        <p className="text-[9px] text-gray-700 text-center">Powered by Qwen3 · Not financial advice</p>
       </div>
     </div>
   );
