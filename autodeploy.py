@@ -46,9 +46,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
             # Restart backend
             subprocess.run(["pkill", "-f", "uvicorn app.main"], check=False)
             subprocess.Popen(
-                ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"],
+                [os.path.expanduser("~/.local/bin/uvicorn"), "app.main:app", "--host", "0.0.0.0", "--port", "80"],
                 cwd=os.path.join(APP_DIR, "backend"),
-                stdout=open(os.path.expanduser("~/backtestlab.log"), "a"),
+                stdout=open(os.path.expanduser("~/backtestlab.log"), "a"),  # noqa
                 stderr=subprocess.STDOUT,
             )
             print("=== Deploy successful ===")

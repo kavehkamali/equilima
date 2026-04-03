@@ -7,7 +7,7 @@ export default function Header({ activeTab, setActiveTab }) {
         <div className="flex items-center gap-3">
           <BarChart3 className="w-6 h-6 text-indigo-400" />
           <h1 className="text-lg font-semibold tracking-tight text-white">
-            Backtest Lab
+            Equilima
           </h1>
         </div>
 
