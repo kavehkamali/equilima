@@ -19,7 +19,7 @@ export default function Header({ activeTab, setActiveTab, user, onSignIn, onSign
   };
 
   return (
-    <header className="border-b border-white/5">
+    <header className="border-b border-white/5 overflow-hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex items-center justify-between gap-2">
         {/* Logo */}
         <div className="flex items-center gap-2 shrink-0">
@@ -38,7 +38,7 @@ export default function Header({ activeTab, setActiveTab, user, onSignIn, onSign
         </nav>
 
         {/* Mobile nav - scrollable tabs */}
-        <nav className="md:hidden flex-1 overflow-x-auto no-scrollbar mx-1">
+        <nav className="md:hidden flex-1 min-w-0 overflow-x-auto no-scrollbar mx-1">
           <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5 w-max">
             {TABS.map(tab => (
               <button key={tab.id} onClick={() => handleTab(tab.id)}

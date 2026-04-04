@@ -43,11 +43,12 @@ function HeroTooltip({ active, payload }) {
 }
 
 // ─── Helpers ───
-function Sparkline({ data, width = 100, height = 32 }) {
+function Sparkline({ data, height = 32 }) {
   if (!data?.length) return null;
+  const w = 200; // viewBox width, SVG scales to container
   const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * width},${height - ((v - min) / range) * height}`).join(' ');
-  return <svg width={width} height={height}><polyline fill="none" stroke={data[data.length - 1] >= data[0] ? '#22c55e' : '#ef4444'} strokeWidth="1.5" points={pts} /></svg>;
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${height - ((v - min) / range) * height}`).join(' ');
+  return <svg viewBox={`0 0 ${w} ${height}`} className="w-full" style={{ height }}><polyline fill="none" stroke={data[data.length - 1] >= data[0] ? '#22c55e' : '#ef4444'} strokeWidth="2" points={pts} /></svg>;
 }
 function Pct({ value }) {
   if (value == null) return <span className="text-gray-600">—</span>;
@@ -82,7 +83,7 @@ function MarketCard({ item, period }) {
   const change = getChange(item, period);
   const up = change != null && change >= 0;
   return (
-    <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3 hover:border-white/10 transition-all">
+    <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3 hover:border-white/10 transition-all overflow-hidden min-w-0">
       <div className="flex items-start justify-between mb-1.5">
         <div className="text-[10px] text-gray-500 truncate max-w-[80px]">{item.name}</div>
         <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${change == null ? 'bg-white/5 text-gray-500' : up ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
@@ -90,7 +91,7 @@ function MarketCard({ item, period }) {
         </div>
       </div>
       <div className={`text-sm font-bold ${change == null ? 'text-gray-400' : up ? 'text-emerald-400' : 'text-red-400'}`}>{fmtPrice(item.price)}</div>
-      <div className="mt-1.5"><Sparkline data={sliceSparkline(item.sparkline, period)} width={120} height={28} /></div>
+      <div className="mt-1.5"><Sparkline data={sliceSparkline(item.sparkline, period)} height={28} /></div>
       {/* Show other periods as context */}
       <div className="flex gap-2 mt-1.5 flex-wrap">
         {PERIODS.filter(p => p.id !== '1D' && p.key !== period).slice(0, 3).map(p => {
