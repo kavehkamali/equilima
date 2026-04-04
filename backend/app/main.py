@@ -215,7 +215,7 @@ def compare_strategies(req: CompareRequest):
     try:
         df = fetch_stock_data(req.symbol, period=req.period)
         results = []
-        for strategy_id in strategies:
+        for strategy_id in req.strategies:
             strategy = StrategyType(strategy_id)
             params = req.params_per_strategy.get(strategy_id, {})
             config = BacktestConfig(

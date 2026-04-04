@@ -822,13 +822,13 @@ export default function ResearchPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <form onSubmit={handleSubmit} className="relative flex-1 max-w-md">
+      <div className="space-y-2">
+        <form onSubmit={handleSubmit} className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input type="text" value={symbolInput} onChange={e => setSymbolInput(e.target.value.toUpperCase())}
             placeholder="Search ticker..." className="w-full bg-white/[0.03] border border-white/5 rounded-xl pl-10 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500/50" />
         </form>
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar">
           {popular.map(s => (
             <button key={s} onClick={() => { setSymbolInput(s); loadSymbol(s); }}
               className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all ${
