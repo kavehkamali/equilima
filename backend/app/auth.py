@@ -27,8 +27,8 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 SECRET_KEY = os.environ.get("JWT_SECRET", secrets.token_hex(32))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 72
-SOFT_LIMIT = 5
-HARD_LIMIT = 20
+SOFT_LIMIT = 50
+HARD_LIMIT = 500
 
 SITE_URL = os.environ.get("SITE_URL", "https://equilima.com")
 

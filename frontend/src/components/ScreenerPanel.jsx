@@ -175,7 +175,7 @@ function ToggleRow({ label, value, onChange, options }) {
 // ─── Main ───
 export default function ScreenerPanel() {
   const [lists, setLists] = useState([]);
-  const [activeList, setActiveList] = useState('all');
+  const [activeList, setActiveList] = useState('sp500');
   const [results, setResults] = useState(null);
   const [listName, setListName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -266,8 +266,8 @@ export default function ScreenerPanel() {
     fetchScreenerLists().then(d => setLists(d.lists)).catch(() => {});
     // Auto-load all stocks on first visit
     setLoading(true);
-    runScreener({ list_id: 'all', strategies: ALL_STRATEGIES })
-      .then(res => { setResults(res.results); setListName(res.list_name); setActiveList('all'); })
+    runScreener({ list_id: 'sp500', strategies: ALL_STRATEGIES })
+      .then(res => { setResults(res.results); setListName(res.list_name); setActiveList('sp500'); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

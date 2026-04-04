@@ -394,7 +394,7 @@ export default function AgentPanel({ onNavigate }) {
             <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-3">
               <Sparkles className="w-7 h-7 text-indigo-400" />
             </div>
-            <h1 className="text-xl font-bold text-white mb-1">Equilima AI</h1>
+            <h1 className="text-xl font-bold text-white mb-1">Equilima Agent</h1>
             <p className="text-xs text-gray-500 max-w-md mx-auto">AI-powered market research assistant</p>
             <div className="flex items-center gap-2 justify-center mt-2">
               <div className={`w-2 h-2 rounded-full ${agentOnline ? 'bg-emerald-400' : agentOnline === false ? 'bg-red-400' : 'bg-yellow-400'}`} />

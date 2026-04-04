@@ -1,6 +1,17 @@
 """
-Stock universes: S&P 500, Mid Caps, Small Caps, TSX, Sectors.
+Stock universes: Full US market (~7000), S&P 500, Mid Caps, Small Caps, TSX, Sectors.
+Full list fetched from NASDAQ API and cached to disk.
 """
+
+import os
+import json
+import time
+from pathlib import Path
+
+CACHE_FILE = Path.home() / ".equilima_data" / "all_tickers.json"
+CACHE_TTL = 7 * 24 * 3600  # refresh weekly
+
+# ─── Curated lists (always available, no network needed) ───
 
 SP500 = [
     # Technology
@@ -24,7 +35,7 @@ SP500 = [
     # Consumer Discretionary
     "AMZN", "TSLA", "HD", "MCD", "NKE", "LOW", "SBUX", "TJX", "BKNG", "CMG",
     "ORLY", "AZO", "ROST", "DHI", "LEN", "PHM", "GPC", "POOL", "BBY", "ULTA",
-    "DRI", "YUM", "DARDEN", "HLT", "MAR", "H", "RCL", "CCL", "NCLH", "MGM",
+    "DRI", "YUM", "HLT", "MAR", "RCL", "CCL", "NCLH", "MGM",
     "WYNN", "LVS", "F", "GM", "APTV", "BWA", "LEA", "RL", "PVH", "TPR",
     "GRMN", "HAS", "EBAY", "ETSY",
     # Consumer Staples
@@ -42,8 +53,7 @@ SP500 = [
     "EXPD", "JBHT", "TDG", "HWM", "TXT", "LHX", "HII", "DOV", "XYL", "VRSK",
     # Utilities
     "NEE", "SO", "DUK", "AEP", "D", "SRE", "EXC", "ED", "XEL", "WEC",
-    "ES", "PPL", "AES", "FE", "CMS", "DTE", "EVRG", "ATO", "NI", "PNW",
-    "LNT",
+    "ES", "PPL", "AES", "FE", "CMS", "DTE", "EVRG", "ATO", "NI", "PNW", "LNT",
     # Real Estate
     "PLD", "AMT", "CCI", "SPG", "EQIX", "PSA", "O", "DLR", "WELL", "ARE",
     "VTR", "AVB", "EQR", "MAA", "UDR", "ESS", "REG", "FRT", "KIM", "BXP",
@@ -58,21 +68,17 @@ SP500 = [
 ]
 
 MID_CAPS = [
-    # Popular mid-cap growth
     "DDOG", "ZS", "NET", "BILL", "HUBS", "VEEV", "PAYC", "PCTY", "SSNC", "TOST",
     "DUOL", "APP", "CELH", "ONON", "DECK", "CASY", "TXRH", "WING", "ELF", "LULU",
     "WDAY", "OKTA", "MDB", "SNOW", "DOCU", "ZM", "ROKU", "PINS", "SNAP", "RBLX",
-    # Mid-cap value
     "ALLY", "OZK", "FHN", "SNV", "ASB", "PNFP", "UMBF", "CBSH", "IBKR",
     "RBC", "ACM", "TTEK", "BWXT", "KBR", "LDOS", "SAIC", "BAH", "CACI",
     "WSO", "RRX", "WCC", "AIT", "GATX", "GGG", "MIDD",
-    # Mid-cap biotech/health
     "EXAS", "NBIX", "PCVX", "SRPT", "RARE", "UTHR", "HALO", "MASI", "NVCR",
-    "GMED", "LIVN", "ITGR", "OMCL", "PRGO", "Jazz",
+    "GMED", "LIVN", "ITGR", "OMCL", "PRGO",
 ]
 
 SMALL_CAPS = [
-    # Popular small-cap growth
     "SMCI", "IONQ", "RGTI", "SOUN", "BBAI", "ASTS", "LUNR", "RKLB", "AEHR",
     "ACHR", "JOBY", "BLDE", "EVTL", "LILM",
     "UPST", "SOFI", "AFRM", "LC", "OPEN", "CLOV",
@@ -80,21 +86,16 @@ SMALL_CAPS = [
     "DM", "XONE", "MKFG", "NNDM",
     "QS", "MVST", "AMPX", "DCFC",
     "DNA", "BNGO", "OUST",
-    # Small-cap value / dividend
     "OLP", "STAG", "GOOD", "GTY", "PINE", "EPRT",
     "SBRA", "CTRE", "LTC", "NHI",
     "BANF", "BUSE", "WASH", "NWBI", "FFBC", "SRCE", "FULT", "WSBC",
-    # Small-cap energy
     "NEXT", "RUN", "NOVA", "ARRY", "SHLS", "SEDG",
     "SM", "MTDR", "CHRD", "ESTE", "VTLE", "CIVI",
-    # Small-cap consumer
     "BROS", "SHAK", "JACK", "CAKE", "DENN", "EAT", "PLAY",
-    "CROX", "SKX", "FOXF", "HIBB", "BOOT", "PLBY",
-    # Small-cap tech
+    "CROX", "SKX", "FOXF", "HIBB", "BOOT",
     "ASAN", "FROG", "BRZE", "CWAN", "ALKT", "PRGS", "MTTR",
     "VERI", "BIGC", "GDYN", "GLOB", "TASK",
-    # Small-cap industrial
-    "ATKR", "AIMC", "UFPT", "ROCK", "KFRC", "HRI", "MGRC",
+    "ATKR", "AIMC", "UFPT", "ROCK", "KFRC", "HRI",
 ]
 
 TSX60 = [
@@ -126,11 +127,74 @@ SECTORS = {
     "Materials": [s for s in SP500[348:]],
 }
 
-# Deduplicate
-_all_unique = list(dict.fromkeys(SP500 + MID_CAPS + SMALL_CAPS + TSX60))
+
+# ─── Dynamic full market list (~7000 stocks) ───
+
+def _fetch_all_tickers():
+    """Fetch all NYSE + NASDAQ tickers from public APIs. Returns list of symbols."""
+    import urllib.request
+
+    all_symbols = set()
+
+    for exchange in ["NYSE", "NASDAQ", "AMEX"]:
+        try:
+            url = f"https://api.nasdaq.com/api/screener/stocks?tableType=traded&exchange={exchange}&limit=10000"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read())
+                rows = data.get("data", {}).get("table", {}).get("rows", [])
+                for row in rows:
+                    sym = row.get("symbol", "").strip()
+                    # Filter: no warrants, units, preferred, or too-long symbols
+                    if sym and len(sym) <= 5 and not any(c in sym for c in ["/", "^", "+"]):
+                        all_symbols.add(sym)
+        except Exception as e:
+            print(f"[stock_lists] Failed to fetch {exchange}: {e}")
+
+    return sorted(all_symbols)
+
+
+def get_full_market():
+    """Get full market ticker list, cached to disk."""
+    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    # Check cache
+    if CACHE_FILE.exists():
+        age = time.time() - CACHE_FILE.stat().st_mtime
+        if age < CACHE_TTL:
+            try:
+                with open(CACHE_FILE) as f:
+                    symbols = json.load(f)
+                if len(symbols) > 1000:
+                    return symbols
+            except Exception:
+                pass
+
+    # Fetch fresh
+    try:
+        symbols = _fetch_all_tickers()
+        if len(symbols) > 1000:
+            with open(CACHE_FILE, "w") as f:
+                json.dump(symbols, f)
+            print(f"[stock_lists] Cached {len(symbols)} tickers")
+            return symbols
+    except Exception as e:
+        print(f"[stock_lists] Fetch failed: {e}")
+
+    # Fallback to curated list
+    return list(dict.fromkeys(SP500 + MID_CAPS + SMALL_CAPS))
+
+
+# Load full market on import (cached, fast)
+try:
+    FULL_MARKET = get_full_market()
+except Exception:
+    FULL_MARKET = list(dict.fromkeys(SP500 + MID_CAPS + SMALL_CAPS))
+
+_curated = list(dict.fromkeys(SP500 + MID_CAPS + SMALL_CAPS + TSX60))
 
 LISTS = {
-    "all": {"name": "All Stocks", "symbols": _all_unique},
+    "all": {"name": f"All US Stocks ({len(FULL_MARKET)})", "symbols": FULL_MARKET},
     "sp500": {"name": "S&P 500", "symbols": list(dict.fromkeys(SP500))},
     "midcap": {"name": "Mid Caps", "symbols": MID_CAPS},
     "smallcap": {"name": "Small Caps", "symbols": SMALL_CAPS},
