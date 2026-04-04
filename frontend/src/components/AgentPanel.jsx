@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Bot, User, Sparkles, TrendingUp, Zap, ExternalLink, BarChart3, Search, FileText } from 'lucide-react';
+import { Send, Loader2, Bot, User, Sparkles, TrendingUp, Zap, ExternalLink, BarChart3, Search, FileText, Trash2 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, YAxis, XAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { agentHealth, fetchTerminalChart, fetchResearch } from '../api';
 import SnowflakeChart from './SnowflakeChart';
@@ -415,6 +415,13 @@ export default function AgentPanel({ onNavigate }) {
             </button>
           </div>
           <span className="text-[9px] text-gray-600">{mode === 'quick' ? 'Fast response' : 'Multi-agent deep analysis'}</span>
+          {messages.length > 0 && !loading && (
+            <button onClick={() => { setMessages([]); setStreamingText(''); }}
+              className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] text-gray-500 hover:text-white hover:bg-white/5 transition-colors"
+              title="Clear chat">
+              <Trash2 className="w-3 h-3" /> New chat
+            </button>
+          )}
         </div>
 
         <div className="flex gap-2">
