@@ -17,7 +17,7 @@ from .terminal import router as terminal_router
 from .research import router as research_router
 from .auth import router as auth_router
 from .analytics import router as analytics_router
-from .shared_cache import get_or_compute, SCREENER_TTL, DASHBOARD_TTL, CRYPTO_TTL, RESEARCH_TTL, cache_stats
+from .shared_cache import get_or_compute, get_cached_or_refresh_bg, SCREENER_TTL, DASHBOARD_TTL, CRYPTO_TTL, RESEARCH_TTL, cache_stats
 
 app = FastAPI(title="Stock Backtesting Dashboard API")
 app.include_router(terminal_router)
@@ -290,7 +290,8 @@ def screener(req: ScreenerRequest):
     def _compute():
         return _screener_compute(req.list_id, req.strategies)
 
-    result = get_or_compute(cache_key, SCREENER_TTL, _compute)
+    # Always return cached data instantly, refresh in background if stale
+    result = get_cached_or_refresh_bg(cache_key, SCREENER_TTL, _compute)
     return result
 
 
