@@ -117,7 +117,7 @@ function App() {
             <a href="/" className="text-xs text-gray-500 hover:text-white">Back to site</a>
           </div>
         </header>
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-12 mt-4">
+        <main className="max-w-7xl mx-auto px-3 sm:px-6 pb-8 sm:pb-12 mt-2 sm:mt-4">
           <AdminPanel />
         </main>
       </div>
@@ -138,7 +138,7 @@ function App() {
       {isTerminal && <TerminalPanel />}
 
       {!isTerminal && (
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-12 mt-4">
+        <main className="max-w-7xl mx-auto px-3 sm:px-6 pb-8 sm:pb-12 mt-2 sm:mt-4">
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
               {error}

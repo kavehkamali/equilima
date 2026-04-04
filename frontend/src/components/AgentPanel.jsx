@@ -386,7 +386,7 @@ export default function AgentPanel({ onNavigate }) {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-60px)] max-w-4xl mx-auto">
+    <div className="flex flex-col h-[calc(100vh-52px)] sm:h-[calc(100vh-60px)] max-w-4xl mx-auto">
       {/* Input area — top */}
       <div className="shrink-0 px-4 pt-4 pb-2">
         {messages.length === 0 && (

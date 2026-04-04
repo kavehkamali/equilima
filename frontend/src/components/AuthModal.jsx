@@ -141,7 +141,7 @@ export default function AuthModal({ onClose, onAuth, mode: initialMode = 'signup
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={forced ? undefined : onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
-      <div className="relative bg-[#12121a] border border-white/10 rounded-2xl w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="relative bg-[#12121a] border border-white/10 rounded-2xl w-full max-w-md mx-3 sm:mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         {!forced && onClose && (
           <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors">
             <X className="w-5 h-5" />

@@ -74,7 +74,7 @@ function TerminalInner() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 48px)' }}>
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-2 py-1.5 bg-[#08080d] border-b border-white/5 shrink-0">
+      <div className="flex items-center gap-2 px-2 py-1.5 bg-[#08080d] border-b border-white/5 shrink-0 overflow-x-auto no-scrollbar">
         {/* Timeframe buttons */}
         <div className="flex gap-0.5">
           {TIMEFRAMES.map(tf => {
@@ -142,9 +142,9 @@ function TerminalInner() {
 
       {/* Main content */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        {/* Watchlist */}
+        {/* Watchlist — hidden on mobile */}
         {state.showWatchlist && (
-          <div style={{ width: 176, flexShrink: 0, height: '100%' }}>
+          <div className="hidden sm:block" style={{ width: 176, flexShrink: 0, height: '100%' }}>
             <WatchlistSidebar />
           </div>
         )}
@@ -165,9 +165,9 @@ function TerminalInner() {
           ))}
         </div>
 
-        {/* AI Panel */}
+        {/* AI Panel — hidden on mobile */}
         {state.showAiPanel && (
-          <div style={{ width: 288, flexShrink: 0, height: '100%', borderLeft: '1px solid rgba(255,255,255,0.05)', background: '#0a0a10', overflow: 'auto' }}>
+          <div className="hidden md:block" style={{ width: 288, flexShrink: 0, height: '100%', borderLeft: '1px solid rgba(255,255,255,0.05)', background: '#0a0a10', overflow: 'auto' }}>
             <AiInsightPanel
               symbol={focusedPane.symbol}
               timeframe={focusedPane.timeframe}
